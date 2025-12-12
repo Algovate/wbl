@@ -1,5 +1,7 @@
 # WBL - Webpack Bundle Loader
 
+[![npm version](https://img.shields.io/npm/v/wbl.svg)](https://www.npmjs.com/package/wbl)
+
 A CLI tool for loading, analyzing, and interacting with webpack bundles.
 
 ## Features
