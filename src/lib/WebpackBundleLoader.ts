@@ -7,6 +7,9 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { BundleLoadError, ModuleNotFoundError, ModuleExecutionError, UnknownBundleFormatError } from './errors.js';
+import { BUNDLE_PATTERNS } from './constants.js';
+import { findMatchingBrace } from './utils/index.js';
 
 export interface BundleInfo {
     name: string;
@@ -50,6 +53,9 @@ export class WebpackBundleLoader {
     private installedModules: Record<string, WebpackModule> = {};
     private bundleInfo: BundleInfo[] = [];
 
+    // findMatchingBrace is imported from utils - kept as static method for backwards compatibility
+    private static findMatchingBrace = findMatchingBrace;
+
     /**
      * Load a webpack bundle file
      */
@@ -63,21 +69,45 @@ export class WebpackBundleLoader {
         let format: BundleInfo['format'] = 'unknown';
 
         // Chunk format: (window.webpackJsonp = ...).push([["ChunkName"], { modules }])
-        if (content.startsWith('(window.webpackJsonp')) {
+        // Note: Chunk format can have multiple objects separated by commas
+        if (content.startsWith(BUNDLE_PATTERNS.CHUNK_START)) {
             format = 'chunk';
-            const start = content.indexOf('], {');
+            const start = content.indexOf(BUNDLE_PATTERNS.CHUNK_MODULES);
             if (start !== -1) {
+                // For chunk format, use the original simple approach:
+                // Extract everything from '], {' to the end, then remove trailing '}]);'
+                // This handles cases where there are multiple objects separated by commas
                 const modulesPart = content.substring(start + 3).replace(/\}\s*\]\s*\)\s*;?\s*$/, '}');
-                newModules = eval('(' + modulesPart + ')');
+                try {
+                    newModules = eval('(' + modulesPart + ')');
+                } catch (error) {
+                    throw new BundleLoadError(
+                        bundleName,
+                        `Failed to parse modules object: ${error instanceof Error ? error.message : String(error)}`
+                    );
+                }
+            } else {
+                throw new BundleLoadError(bundleName, `Could not find modules object pattern '${BUNDLE_PATTERNS.CHUNK_MODULES}'`);
             }
         }
         // Main bundle format: !function(e) { ... }({ modules })
+        // For main bundles, the modules object extends to the end of the file before the closing '});'
+        // We use the simple approach: take everything after '}({' and remove trailing ');'
         else {
             format = 'main';
-            const match = content.match(/\}\(\{/);
+            const match = content.match(BUNDLE_PATTERNS.MAIN);
             if (match && match.index !== undefined) {
                 const modulesPart = content.substring(match.index + 2).replace(/\);\s*$/, '');
-                newModules = eval('(' + modulesPart + ')');
+                try {
+                    newModules = eval('(' + modulesPart + ')');
+                } catch (error) {
+                    throw new BundleLoadError(
+                        bundleName,
+                        `Failed to parse modules object: ${error instanceof Error ? error.message : String(error)}`
+                    );
+                }
+            } else {
+                throw new UnknownBundleFormatError(bundleName);
             }
         }
 
@@ -113,13 +143,32 @@ export class WebpackBundleLoader {
     /**
      * Webpack require function
      */
+    // Hooks system
+    private hooks: {
+        beforeExecute: Array<(moduleId: string, module: WebpackModule) => void>;
+    } = {
+            beforeExecute: []
+        };
+
+    /**
+     * Add a hook to intercept loader events
+     */
+    addHook(type: 'beforeExecute', callback: (moduleId: string, module: WebpackModule) => void): void {
+        if (this.hooks[type]) {
+            this.hooks[type].push(callback);
+        }
+    }
+
+    /**
+     * Webpack require function
+     */
     require(moduleId: string): unknown {
         if (this.installedModules[moduleId]) {
             return this.installedModules[moduleId].exports;
         }
 
         if (!this.modules[moduleId]) {
-            throw new Error(`Module "${moduleId}" not found`);
+            throw new ModuleNotFoundError(moduleId);
         }
 
         const module: WebpackModule = this.installedModules[moduleId] = {
@@ -162,8 +211,18 @@ export class WebpackBundleLoader {
         __webpack_require__.c = this.installedModules;
         __webpack_require__.p = '';
 
-        // Execute module
-        this.modules[moduleId].call(module.exports, module, module.exports, __webpack_require__);
+        // Execute hooks
+        this.hooks.beforeExecute.forEach(hook => hook(moduleId, module));
+
+        // Execute module with error context
+        try {
+            this.modules[moduleId].call(module.exports, module, module.exports, __webpack_require__);
+        } catch (error) {
+            if (error instanceof Error) {
+                throw new ModuleExecutionError(moduleId, error);
+            }
+            throw new ModuleExecutionError(moduleId, new Error(String(error)));
+        }
         module.l = true;
 
         return module.exports;
@@ -190,7 +249,11 @@ export class WebpackBundleLoader {
         if (!this.modules[moduleId]) {
             return null;
         }
-        return this.modules[moduleId].toString();
+        try {
+            return this.modules[moduleId].toString();
+        } catch (e) {
+            return '[Native or bound function]';
+        }
     }
 
     /**

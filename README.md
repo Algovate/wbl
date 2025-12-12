@@ -11,6 +11,12 @@ A CLI tool for loading, analyzing, and interacting with webpack bundles.
 - 📞 Call exported methods
 - 💻 Interactive REPL mode
 
+## ⚠️ Security Notice
+
+This tool uses `eval()` internally to parse and execute webpack bundle modules. **Only load bundles from trusted sources.** Loading malicious bundles could result in arbitrary code execution.
+
+If you need to analyze untrusted bundles, consider running this tool in an isolated environment (e.g., Docker container, VM).
+
 ## Installation
 
 ```bash
@@ -65,7 +71,14 @@ node dist/bin/wbl.js repl assets/app.js
 ### Programmatic API
 
 ```typescript
-import { WebpackBundleLoader, ModuleAnalyzer } from 'wbl';
+import { WebpackBundleLoader, ModuleAnalyzer, setupBrowserEnv } from 'wbl';
+
+// Optional: Setup browser environment for bundles that need DOM/window
+setupBrowserEnv({
+    url: 'https://example.com/',
+    referrer: 'https://example.com/',
+    regexpPatches: { "['鈥橾": "\\['鈥橾" }  // Fix malformed regex patterns
+});
 
 const loader = new WebpackBundleLoader();
 loader.loadBundle('path/to/bundle.js');
@@ -81,6 +94,16 @@ const exports = analyzer.analyzeExports('moduleId');
 // Call a method
 const result = analyzer.callMethod('moduleId', 'methodName', [args]);
 ```
+
+### Browser Environment Options
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `url` | string | The URL for the simulated page |
+| `referrer` | string | The referrer URL |
+| `regexpPatches` | Record<string, string> | Map of broken regex patterns to fixed versions |
+| `storageQuota` | number | Storage quota for localStorage/sessionStorage |
+| `runScripts` | "dangerously" \| "outside-only" | Script execution mode |
 
 ## Bundle Formats
 
@@ -110,14 +133,32 @@ npm run lint
 ```
 wbl/
 ├── src/
-│   ├── bin/wbl.ts              # CLI entry
+│   ├── bin/
+│   │   ├── wbl.ts              # CLI entry point
+│   │   ├── types.ts            # CLI types (CommandContext)
+│   │   └── commands/           # CLI command handlers
+│   │       ├── list.ts
+│   │       ├── inspect.ts
+│   │       ├── deps.ts
+│   │       ├── search.ts
+│   │       ├── source.ts
+│   │       ├── call.ts
+│   │       ├── info.ts
+│   │       └── repl.ts
 │   ├── lib/
-│   │   ├── WebpackBundleLoader.ts
-│   │   └── ModuleAnalyzer.ts
-│   └── index.ts
+│   │   ├── WebpackBundleLoader.ts  # Core bundle loading
+│   │   ├── ModuleAnalyzer.ts       # Export/dependency analysis
+│   │   ├── BrowserEnv.ts           # JSDOM-based browser simulation
+│   │   ├── errors.ts               # Custom error classes
+│   │   ├── constants.ts            # Bundle patterns, defaults, limits
+│   │   └── utils/                  # Utility functions
+│   │       ├── parsing.ts          # Brace matching
+│   │       └── formatting.ts       # String formatting
+│   └── index.ts                # Main exports
 ├── tests/
 │   ├── WebpackBundleLoader.test.ts
 │   └── ModuleAnalyzer.test.ts
+├── examples/                   # Usage examples
 ├── assets/                     # Sample bundles
 └── dist/                       # Compiled output
 ```

@@ -8,6 +8,7 @@
  */
 
 import { WebpackBundleLoader } from './WebpackBundleLoader.js';
+import { REQUIRE_PATTERNS, LIMITS } from './constants.js';
 
 export interface ModuleInfo {
     id: string;
@@ -154,20 +155,19 @@ export class ModuleAnalyzer {
         const deps: string[] = [];
 
         // Match various require patterns in webpack modules
-        const patterns = [
-            /\be\s*\(\s*["']([^"']+)["']\s*\)/g,  // e("moduleId")
-            /\bt\s*\(\s*["']([^"']+)["']\s*\)/g,  // t("moduleId")
-            /\bn\s*\(\s*["']([^"']+)["']\s*\)/g,  // n("moduleId")
-        ];
-
-        for (const pattern of patterns) {
+        // Patterns are defined in constants.ts
+        for (const pattern of REQUIRE_PATTERNS) {
+            // Create a new RegExp to avoid state issues with global flag
+            const regex = new RegExp(pattern.source, pattern.flags);
             let match;
-            while ((match = pattern.exec(source)) !== null) {
+            while ((match = regex.exec(source)) !== null) {
                 if (!deps.includes(match[1])) {
                     deps.push(match[1]);
                 }
             }
         }
+
+
 
         return {
             moduleId,
@@ -273,7 +273,7 @@ export class ModuleAnalyzer {
                 return `Object{${keys.slice(0, 3).join(', ')}${keys.length > 3 ? '...' : ''}}`;
             }
             case 'string':
-                return value.length > 50 ? value.substring(0, 50) + '...' : value;
+                return value.length > LIMITS.VALUE_PREVIEW ? value.substring(0, LIMITS.VALUE_PREVIEW) + '...' : value;
             default:
                 return String(value);
         }
@@ -304,14 +304,14 @@ export class ModuleAnalyzer {
             const arrowIdx = fnStr.indexOf('=>');
             if (arrowIdx !== -1) {
                 const body = fnStr.substring(arrowIdx + 2).trim();
-                return body.length > 80 ? body.substring(0, 80) + '...' : body;
+                return body.length > LIMITS.BODY_SNIPPET ? body.substring(0, LIMITS.BODY_SNIPPET) + '...' : body;
             }
             return '';
         }
         const body = fnStr.substring(bodyStart + 1, fnStr.lastIndexOf('}'))
             .trim()
             .replace(/\s+/g, ' ');
-        return body.length > 80 ? body.substring(0, 80) + '...' : body;
+        return body.length > LIMITS.BODY_SNIPPET ? body.substring(0, LIMITS.BODY_SNIPPET) + '...' : body;
     }
 }
 
