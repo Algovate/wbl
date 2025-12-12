@@ -143,6 +143,50 @@ function cmdSearch(pattern: string): void {
 }
 
 /**
+ * Show module source code (without executing)
+ */
+function cmdSource(moduleId: string, grep?: string): void {
+    if (!loader) return;
+
+    if (!loader.hasModule(moduleId)) {
+        console.error(`Error: Module "${moduleId}" not found`);
+        return;
+    }
+
+    const source = loader.getModuleSource(moduleId);
+    if (!source) {
+        console.error(`Error: Could not get source for module "${moduleId}"`);
+        return;
+    }
+
+    console.log(`Module: ${moduleId}`);
+    console.log(`Source length: ${source.length} chars\n`);
+
+    if (grep) {
+        // Filter lines containing the pattern
+        const lines = source.split(/[;,]/).map(l => l.trim());
+        const matches = lines.filter(l => l.toLowerCase().includes(grep.toLowerCase()));
+        console.log(`Matches for "${grep}" (${matches.length}):\n`);
+        for (const line of matches.slice(0, 20)) {
+            console.log(`  ${line.substring(0, 120)}${line.length > 120 ? '...' : ''}`);
+        }
+        if (matches.length > 20) {
+            console.log(`\n  ... and ${matches.length - 20} more matches`);
+        }
+    } else {
+        // Pretty print with line breaks
+        const formatted = source
+            .replace(/;/g, ';\n')
+            .replace(/\{/g, '{\n')
+            .replace(/\}/g, '\n}');
+        console.log(formatted.substring(0, 3000));
+        if (source.length > 3000) {
+            console.log(`\n... (${source.length - 3000} more chars, use --grep to filter)`);
+        }
+    }
+}
+
+/**
  * Call a module method
  */
 function cmdCall(methodPath: string, args: string[]): void {
@@ -322,6 +366,16 @@ program
     .action((pattern: string, options: { bundles: string[] }) => {
         initLoader(options.bundles);
         cmdSearch(pattern);
+    });
+
+program
+    .command('source <moduleId>')
+    .description('Show module source code (without executing)')
+    .requiredOption('-b, --bundles <files...>', 'Bundle files to load')
+    .option('-g, --grep <pattern>', 'Filter source by pattern')
+    .action((moduleId: string, options: { bundles: string[]; grep?: string }) => {
+        initLoader(options.bundles);
+        cmdSource(moduleId, options.grep);
     });
 
 program
