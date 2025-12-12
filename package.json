@@ -2,12 +2,21 @@
     "name": "wbl",
     "version": "1.0.0",
     "description": "Webpack Bundle Loader - Load, analyze, and interact with webpack bundles",
-    "main": "lib/WebpackBundleLoader.js",
+    "type": "module",
+    "main": "dist/lib/WebpackBundleLoader.js",
+    "types": "dist/lib/WebpackBundleLoader.d.ts",
     "bin": {
-        "wbl": "./bin/wbl.js"
+        "wbl": "./dist/bin/wbl.js"
     },
     "scripts": {
-        "test": "node bin/wbl.js repl assets/app.js assets/ServiceSearchModule.js"
+        "build": "tsc",
+        "dev": "tsc --watch",
+        "start": "node dist/bin/wbl.js",
+        "lint": "eslint src --ext .ts",
+        "lint:fix": "eslint src --ext .ts --fix",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "repl": "node dist/bin/wbl.js repl assets/app.js assets/ServiceSearchModule.js"
     },
     "keywords": [
         "webpack",
@@ -20,5 +29,13 @@
     "license": "MIT",
     "dependencies": {
         "commander": "^12.0.0"
+    },
+    "devDependencies": {
+        "@types/node": "^20.0.0",
+        "@typescript-eslint/eslint-plugin": "^7.0.0",
+        "@typescript-eslint/parser": "^7.0.0",
+        "eslint": "^8.57.0",
+        "typescript": "^5.0.0",
+        "vitest": "^2.0.0"
     }
 }

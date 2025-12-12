@@ -7,19 +7,63 @@
  * - Search modules
  */
 
-class ModuleAnalyzer {
-    /**
-     * @param {import('./WebpackBundleLoader')} loader - WebpackBundleLoader instance
-     */
-    constructor(loader) {
-        this.loader = loader;
-    }
+import { WebpackBundleLoader } from './WebpackBundleLoader.js';
+
+export interface ModuleInfo {
+    id: string;
+    preview: string;
+}
+
+export interface ExportInfo {
+    type: string;
+    isFunction: boolean;
+    isClass: boolean;
+    preview: string;
+}
+
+export interface ExportAnalysis {
+    moduleId: string;
+    type: string;
+    isEsModule: boolean;
+    exports: Record<string, ExportInfo>;
+    error?: string;
+}
+
+export interface DependencyAnalysis {
+    moduleId: string;
+    dependencies: string[];
+    count: number;
+    error?: string;
+}
+
+export interface DependentsAnalysis {
+    moduleId: string;
+    dependents: string[];
+    count: number;
+}
+
+export interface SearchMatch {
+    id: string;
+    matchType: 'id' | 'source';
+}
+
+export interface BundleSummary {
+    bundles: {
+        name: string;
+        format: string;
+        size: string;
+        modules: number;
+    }[];
+    totalModules: number;
+}
+
+export class ModuleAnalyzer {
+    constructor(private loader: WebpackBundleLoader) { }
 
     /**
      * Get all module IDs with basic info
-     * @returns {Object[]} Array of module info objects
      */
-    listModules() {
+    listModules(): ModuleInfo[] {
         return this.loader.getModuleIds().map(id => {
             const source = this.loader.getModuleSource(id);
             const preview = source ? source.substring(0, 100).replace(/\s+/g, ' ') : '';
@@ -32,20 +76,24 @@ class ModuleAnalyzer {
 
     /**
      * Analyze exports of a module
-     * @param {string} moduleId - Module ID
-     * @returns {Object} Export analysis
      */
-    analyzeExports(moduleId) {
+    analyzeExports(moduleId: string): ExportAnalysis {
         if (!this.loader.hasModule(moduleId)) {
-            return { error: `Module "${moduleId}" not found` };
+            return {
+                moduleId,
+                type: 'unknown',
+                isEsModule: false,
+                exports: {},
+                error: `Module "${moduleId}" not found`
+            };
         }
 
         try {
-            const exports = this.loader.getModuleExports(moduleId);
-            const result = {
+            const exports = this.loader.getModuleExports(moduleId) as Record<string, unknown>;
+            const result: ExportAnalysis = {
                 moduleId,
                 type: typeof exports,
-                isEsModule: exports && exports.__esModule === true,
+                isEsModule: exports && (exports as { __esModule?: boolean }).__esModule === true,
                 exports: {}
             };
 
@@ -57,39 +105,47 @@ class ModuleAnalyzer {
                         type: typeof value,
                         isFunction: typeof value === 'function',
                         isClass: typeof value === 'function' && /^class\s/.test(value.toString()),
-                        preview: this._getValuePreview(value)
+                        preview: this.getValuePreview(value)
                     };
                 }
             } else if (typeof exports === 'function') {
                 result.exports['default'] = {
                     type: 'function',
                     isFunction: true,
-                    isClass: /^class\s/.test(exports.toString()),
-                    preview: exports.name || '(anonymous)'
+                    isClass: /^class\s/.test(Function.prototype.toString.call(exports)),
+                    preview: (exports as { name?: string }).name || '(anonymous)'
                 };
             }
 
             return result;
         } catch (e) {
-            return { error: e.message };
+            return {
+                moduleId,
+                type: 'unknown',
+                isEsModule: false,
+                exports: {},
+                error: (e as Error).message
+            };
         }
     }
 
     /**
      * Analyze dependencies of a module (modules it requires)
-     * @param {string} moduleId - Module ID
-     * @returns {Object} Dependency analysis
      */
-    analyzeDependencies(moduleId) {
+    analyzeDependencies(moduleId: string): DependencyAnalysis {
         if (!this.loader.hasModule(moduleId)) {
-            return { error: `Module "${moduleId}" not found` };
+            return {
+                moduleId,
+                dependencies: [],
+                count: 0,
+                error: `Module "${moduleId}" not found`
+            };
         }
 
-        const source = this.loader.getModuleSource(moduleId);
-        const deps = [];
+        const source = this.loader.getModuleSource(moduleId) || '';
+        const deps: string[] = [];
 
         // Match various require patterns in webpack modules
-        // Pattern: e("moduleId") or n.n(e("moduleId"))
         const patterns = [
             /\be\s*\(\s*["']([^"']+)["']\s*\)/g,  // e("moduleId")
             /\bt\s*\(\s*["']([^"']+)["']\s*\)/g,  // t("moduleId")
@@ -114,11 +170,9 @@ class ModuleAnalyzer {
 
     /**
      * Find modules that depend on the given module
-     * @param {string} moduleId - Module ID
-     * @returns {Object} Dependents analysis
      */
-    findDependents(moduleId) {
-        const dependents = [];
+    findDependents(moduleId: string): DependentsAnalysis {
+        const dependents: string[] = [];
 
         for (const id of this.loader.getModuleIds()) {
             const source = this.loader.getModuleSource(id);
@@ -139,29 +193,20 @@ class ModuleAnalyzer {
 
     /**
      * Search modules by pattern
-     * @param {string} pattern - Search pattern (supports * wildcard)
-     * @returns {Object[]} Matching modules
      */
-    searchModules(pattern) {
+    searchModules(pattern: string): SearchMatch[] {
         const regex = new RegExp(pattern.replace(/\*/g, '.*'), 'i');
-        const matches = [];
+        const matches: SearchMatch[] = [];
 
         for (const id of this.loader.getModuleIds()) {
             if (regex.test(id)) {
-                matches.push({
-                    id,
-                    matchType: 'id'
-                });
+                matches.push({ id, matchType: 'id' });
                 continue;
             }
 
-            // Also search in source code
             const source = this.loader.getModuleSource(id);
             if (source && regex.test(source)) {
-                matches.push({
-                    id,
-                    matchType: 'source'
-                });
+                matches.push({ id, matchType: 'source' });
             }
         }
 
@@ -170,13 +215,9 @@ class ModuleAnalyzer {
 
     /**
      * Call a method on a module
-     * @param {string} moduleId - Module ID
-     * @param {string} methodName - Method name to call
-     * @param {any[]} args - Arguments to pass
-     * @returns {any} Method result
      */
-    callMethod(moduleId, methodName, args = []) {
-        const exports = this.loader.getModuleExports(moduleId);
+    callMethod(moduleId: string, methodName: string, args: unknown[] = []): unknown {
+        const exports = this.loader.getModuleExports(moduleId) as Record<string, unknown>;
 
         if (!exports) {
             throw new Error(`Module "${moduleId}" not found or has no exports`);
@@ -193,9 +234,8 @@ class ModuleAnalyzer {
 
     /**
      * Get summary of loaded bundles and modules
-     * @returns {Object} Summary object
      */
-    getSummary() {
+    getSummary(): BundleSummary {
         const bundles = this.loader.getBundleInfo();
         const moduleCount = this.loader.totalModules;
 
@@ -210,18 +250,20 @@ class ModuleAnalyzer {
         };
     }
 
-    _getValuePreview(value) {
+    private getValuePreview(value: unknown): string {
         if (value === null) return 'null';
         if (value === undefined) return 'undefined';
 
         switch (typeof value) {
             case 'function':
-                return value.name || '(anonymous function)';
-            case 'object':
+                return (value as { name?: string }).name || '(anonymous function)';
+            case 'object': {
                 if (Array.isArray(value)) {
                     return `Array(${value.length})`;
                 }
-                return `Object{${Object.keys(value).slice(0, 3).join(', ')}${Object.keys(value).length > 3 ? '...' : ''}}`;
+                const keys = Object.keys(value as object);
+                return `Object{${keys.slice(0, 3).join(', ')}${keys.length > 3 ? '...' : ''}}`;
+            }
             case 'string':
                 return value.length > 50 ? value.substring(0, 50) + '...' : value;
             default:
@@ -230,4 +272,4 @@ class ModuleAnalyzer {
     }
 }
 
-module.exports = ModuleAnalyzer;
+export default ModuleAnalyzer;

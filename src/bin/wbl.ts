@@ -12,20 +12,20 @@
  *   repl              Interactive REPL mode
  */
 
-const { program } = require('commander');
-const readline = require('readline');
-const path = require('path');
-const WebpackBundleLoader = require('../lib/WebpackBundleLoader');
-const ModuleAnalyzer = require('../lib/ModuleAnalyzer');
+import { program } from 'commander';
+import * as readline from 'readline';
+import * as path from 'path';
+import { WebpackBundleLoader } from '../lib/WebpackBundleLoader.js';
+import { ModuleAnalyzer } from '../lib/ModuleAnalyzer.js';
 
 // Shared state
-let loader = null;
-let analyzer = null;
+let loader: WebpackBundleLoader | null = null;
+let analyzer: ModuleAnalyzer | null = null;
 
 /**
  * Initialize loader with bundle files
  */
-function initLoader(bundles) {
+function initLoader(bundles: string[]): { loader: WebpackBundleLoader; analyzer: ModuleAnalyzer } {
     if (!bundles || bundles.length === 0) {
         console.error('Error: No bundle files specified');
         process.exit(1);
@@ -40,7 +40,7 @@ function initLoader(bundles) {
             const name = path.basename(bundle);
             console.log(`  ${name}: ${count} modules`);
         } catch (e) {
-            console.error(`  Error loading ${bundle}: ${e.message}`);
+            console.error(`  Error loading ${bundle}: ${(e as Error).message}`);
         }
     }
     console.log(`Total: ${loader.totalModules} modules\n`);
@@ -52,7 +52,8 @@ function initLoader(bundles) {
 /**
  * List all modules
  */
-function cmdList() {
+function cmdList(): void {
+    if (!analyzer) return;
     const modules = analyzer.listModules();
     console.log(`Modules (${modules.length}):\n`);
 
@@ -64,7 +65,8 @@ function cmdList() {
 /**
  * Inspect module exports
  */
-function cmdInspect(moduleId) {
+function cmdInspect(moduleId: string): void {
+    if (!analyzer) return;
     const result = analyzer.analyzeExports(moduleId);
 
     if (result.error) {
@@ -86,7 +88,8 @@ function cmdInspect(moduleId) {
 /**
  * Show module dependencies
  */
-function cmdDeps(moduleId) {
+function cmdDeps(moduleId: string): void {
+    if (!analyzer) return;
     const deps = analyzer.analyzeDependencies(moduleId);
 
     if (deps.error) {
@@ -113,7 +116,8 @@ function cmdDeps(moduleId) {
 /**
  * Search modules
  */
-function cmdSearch(pattern) {
+function cmdSearch(pattern: string): void {
+    if (!analyzer) return;
     const matches = analyzer.searchModules(pattern);
 
     console.log(`Search: "${pattern}"`);
@@ -127,7 +131,8 @@ function cmdSearch(pattern) {
 /**
  * Call a module method
  */
-function cmdCall(methodPath, args) {
+function cmdCall(methodPath: string, args: string[]): void {
+    if (!analyzer) return;
     const parts = methodPath.split('.');
     if (parts.length < 2) {
         console.error('Error: Use format moduleId.methodName');
@@ -150,14 +155,16 @@ function cmdCall(methodPath, args) {
         const result = analyzer.callMethod(moduleId, methodName, parsedArgs);
         console.log('Result:', result);
     } catch (e) {
-        console.error(`Error: ${e.message}`);
+        console.error(`Error: ${(e as Error).message}`);
     }
 }
 
 /**
  * Interactive REPL mode
  */
-function cmdRepl() {
+function cmdRepl(): void {
+    if (!loader || !analyzer) return;
+
     const rl = readline.createInterface({
         input: process.stdin,
         output: process.stdout,
@@ -167,7 +174,7 @@ function cmdRepl() {
     console.log('WBL REPL - Type "help" for commands, "exit" to quit\n');
     rl.prompt();
 
-    rl.on('line', (line) => {
+    rl.on('line', (line: string) => {
         const input = line.trim();
         if (!input) {
             rl.prompt();
@@ -216,12 +223,12 @@ Commands:
                 break;
 
             case 'require':
-                if (args[0]) {
+                if (args[0] && loader) {
                     try {
                         const exports = loader.require(args[0]);
                         console.log(exports);
                     } catch (e) {
-                        console.error(`Error: ${e.message}`);
+                        console.error(`Error: ${(e as Error).message}`);
                     }
                 } else {
                     console.error('Usage: require <moduleId>');
@@ -229,12 +236,14 @@ Commands:
                 break;
 
             case 'info':
-                const summary = analyzer.getSummary();
-                console.log('Bundles:');
-                for (const b of summary.bundles) {
-                    console.log(`  ${b.name}: ${b.size}, ${b.modules} modules (${b.format})`);
+                if (analyzer) {
+                    const summary = analyzer.getSummary();
+                    console.log('Bundles:');
+                    for (const b of summary.bundles) {
+                        console.log(`  ${b.name}: ${b.size}, ${b.modules} modules (${b.format})`);
+                    }
+                    console.log(`Total: ${summary.totalModules} modules`);
                 }
-                console.log(`Total: ${summary.totalModules} modules`);
                 break;
 
             case 'exit':
@@ -268,7 +277,7 @@ program
     .command('list')
     .description('List all loaded modules')
     .requiredOption('-b, --bundles <files...>', 'Bundle files to load')
-    .action((options) => {
+    .action((options: { bundles: string[] }) => {
         initLoader(options.bundles);
         cmdList();
     });
@@ -277,7 +286,7 @@ program
     .command('inspect <moduleId>')
     .description('Inspect module exports')
     .requiredOption('-b, --bundles <files...>', 'Bundle files to load')
-    .action((moduleId, options) => {
+    .action((moduleId: string, options: { bundles: string[] }) => {
         initLoader(options.bundles);
         cmdInspect(moduleId);
     });
@@ -286,7 +295,7 @@ program
     .command('deps <moduleId>')
     .description('Show module dependencies')
     .requiredOption('-b, --bundles <files...>', 'Bundle files to load')
-    .action((moduleId, options) => {
+    .action((moduleId: string, options: { bundles: string[] }) => {
         initLoader(options.bundles);
         cmdDeps(moduleId);
     });
@@ -295,7 +304,7 @@ program
     .command('search <pattern>')
     .description('Search modules by pattern')
     .requiredOption('-b, --bundles <files...>', 'Bundle files to load')
-    .action((pattern, options) => {
+    .action((pattern: string, options: { bundles: string[] }) => {
         initLoader(options.bundles);
         cmdSearch(pattern);
     });
@@ -305,7 +314,7 @@ program
     .description('Call a module method (format: moduleId.methodName)')
     .requiredOption('-b, --bundles <files...>', 'Bundle files to load')
     .argument('[args...]', 'Arguments to pass to the method')
-    .action((methodPath, args, options) => {
+    .action((methodPath: string, args: string[], options: { bundles: string[] }) => {
         initLoader(options.bundles);
         cmdCall(methodPath, args);
     });
@@ -314,7 +323,7 @@ program
     .command('repl')
     .description('Interactive REPL mode')
     .argument('<bundles...>', 'Bundle files to load')
-    .action((bundles) => {
+    .action((bundles: string[]) => {
         initLoader(bundles);
         cmdRepl();
     });
@@ -323,14 +332,16 @@ program
     .command('info')
     .description('Show loaded bundle information')
     .requiredOption('-b, --bundles <files...>', 'Bundle files to load')
-    .action((options) => {
+    .action((options: { bundles: string[] }) => {
         initLoader(options.bundles);
-        const summary = analyzer.getSummary();
-        console.log('Bundles:');
-        for (const b of summary.bundles) {
-            console.log(`  ${b.name}: ${b.size}, ${b.modules} modules (${b.format})`);
+        if (analyzer) {
+            const summary = analyzer.getSummary();
+            console.log('Bundles:');
+            for (const b of summary.bundles) {
+                console.log(`  ${b.name}: ${b.size}, ${b.modules} modules (${b.format})`);
+            }
+            console.log(`\nTotal: ${summary.totalModules} modules`);
         }
-        console.log(`\nTotal: ${summary.totalModules} modules`);
     });
 
 program.parse();
