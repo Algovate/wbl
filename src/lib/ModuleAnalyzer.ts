@@ -19,6 +19,8 @@ export interface ExportInfo {
     isFunction: boolean;
     isClass: boolean;
     preview: string;
+    signature?: string;     // Function signature (params)
+    bodySnippet?: string;   // First 100 chars of function body
 }
 
 export interface ExportAnalysis {
@@ -101,12 +103,18 @@ export class ModuleAnalyzer {
                 for (const key of Object.keys(exports)) {
                     if (key === '__esModule') continue;
                     const value = exports[key];
-                    result.exports[key] = {
+                    const exportInfo: ExportInfo = {
                         type: typeof value,
                         isFunction: typeof value === 'function',
                         isClass: typeof value === 'function' && /^class\s/.test(value.toString()),
                         preview: this.getValuePreview(value)
                     };
+                    // Add function details
+                    if (typeof value === 'function') {
+                        exportInfo.signature = this.getFunctionSignature(value);
+                        exportInfo.bodySnippet = this.getFunctionBodySnippet(value);
+                    }
+                    result.exports[key] = exportInfo;
                 }
             } else if (typeof exports === 'function') {
                 result.exports['default'] = {
@@ -269,6 +277,41 @@ export class ModuleAnalyzer {
             default:
                 return String(value);
         }
+    }
+
+    private getFunctionSignature(fn: unknown): string {
+        const fnStr = Function.prototype.toString.call(fn);
+        // Extract parameters from function(a, b, c) or (a, b, c) =>
+        const match = fnStr.match(/^(?:function\s*\w*\s*)?\(([^)]*)\)/);
+        if (match) {
+            const params = match[1].trim();
+            return params ? `(${params})` : '()';
+        }
+        // Arrow function with single param: a =>
+        const arrowMatch = fnStr.match(/^(\w+)\s*=>/);
+        if (arrowMatch) {
+            return `(${arrowMatch[1]})`;
+        }
+        return '(?)';
+    }
+
+    private getFunctionBodySnippet(fn: unknown): string {
+        const fnStr = Function.prototype.toString.call(fn);
+        // Remove function header and get body
+        const bodyStart = fnStr.indexOf('{');
+        if (bodyStart === -1) {
+            // Arrow function with expression body
+            const arrowIdx = fnStr.indexOf('=>');
+            if (arrowIdx !== -1) {
+                const body = fnStr.substring(arrowIdx + 2).trim();
+                return body.length > 80 ? body.substring(0, 80) + '...' : body;
+            }
+            return '';
+        }
+        const body = fnStr.substring(bodyStart + 1, fnStr.lastIndexOf('}'))
+            .trim()
+            .replace(/\s+/g, ' ');
+        return body.length > 80 ? body.substring(0, 80) + '...' : body;
     }
 }
 

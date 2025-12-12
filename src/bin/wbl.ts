@@ -65,8 +65,8 @@ function cmdList(): void {
 /**
  * Inspect module exports
  */
-function cmdInspect(moduleId: string): void {
-    if (!analyzer) return;
+function cmdInspect(moduleId: string, verbose = false): void {
+    if (!analyzer || !loader) return;
     const result = analyzer.analyzeExports(moduleId);
 
     if (result.error) {
@@ -81,7 +81,21 @@ function cmdInspect(moduleId: string): void {
 
     for (const [name, info] of Object.entries(result.exports)) {
         const type = info.isClass ? 'class' : info.isFunction ? 'function' : info.type;
-        console.log(`  ${name}: ${type} - ${info.preview}`);
+        if (info.isFunction && info.signature) {
+            console.log(`\n  ${name}${info.signature}: ${type}`);
+            if (verbose) {
+                // Show full function source in verbose mode
+                const exports = loader.getModuleExports(moduleId) as Record<string, unknown>;
+                if (exports && typeof exports[name] === 'function') {
+                    const fnSource = Function.prototype.toString.call(exports[name]);
+                    console.log(`    Source:\n${fnSource.split('\n').map(l => '      ' + l).join('\n')}`);
+                }
+            } else if (info.bodySnippet) {
+                console.log(`    Body: ${info.bodySnippet}`);
+            }
+        } else {
+            console.log(`  ${name}: ${type} - ${info.preview}`);
+        }
     }
 }
 
@@ -286,9 +300,10 @@ program
     .command('inspect <moduleId>')
     .description('Inspect module exports')
     .requiredOption('-b, --bundles <files...>', 'Bundle files to load')
-    .action((moduleId: string, options: { bundles: string[] }) => {
+    .option('-v, --verbose', 'Show full function source code')
+    .action((moduleId: string, options: { bundles: string[]; verbose?: boolean }) => {
         initLoader(options.bundles);
-        cmdInspect(moduleId);
+        cmdInspect(moduleId, options.verbose ?? false);
     });
 
 program
