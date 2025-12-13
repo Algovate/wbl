@@ -1,6 +1,6 @@
 {
     "name": "wbl",
-    "version": "1.0.0",
+    "version": "0.2.0",
     "description": "Webpack Bundle Loader - Load, analyze, and interact with webpack bundles",
     "type": "module",
     "files": [

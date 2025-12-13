@@ -1,0 +1,26 @@
+# Source files (use dist/ only)
+src/
+
+# Tests
+tests/
+vitest.config.ts
+
+# Examples and samples
+examples/
+
+# Config files
+tsconfig.json
+.eslintrc.json
+
+# IDE and editor
+.cursor/
+.notebook/
+.vscode/
+.idea/
+
+# Logs
+*.log
+
+# Git
+.git/
+.gitignore
