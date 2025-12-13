@@ -30,6 +30,11 @@ import {
     cmdRepl,
     cmdFormat
 } from './commands/index.js';
+import {
+    BrowserEnvOptions,
+    collectRegexpPatches,
+    setupBrowserFromOptions
+} from './utils/options.js';
 
 /**
  * Initialize loader with bundle files
@@ -128,7 +133,11 @@ program
     .command('repl')
     .description('Interactive REPL mode')
     .argument('<bundles...>', 'Bundle files to load')
-    .action((bundles: string[]) => {
+    .option('--browser [url]', 'Enable browser environment simulation (default: https://example.com/)')
+    .option('--referrer <url>', 'Set referrer URL for browser environment')
+    .option('--regexp-patch <from:to>', 'Fix malformed regex (format: pattern:replacement)', collectRegexpPatches, [])
+    .action((bundles: string[], options: BrowserEnvOptions) => {
+        setupBrowserFromOptions(options);
         const ctx = initLoader(bundles);
         cmdRepl(ctx);
     });

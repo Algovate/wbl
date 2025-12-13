@@ -82,3 +82,44 @@ npm run build
 node examples/nhsa-api-simple.js    # 底层方式
 node examples/nhsa-api-demo.js      # 高级方式
 ```
+
+---
+
+## 常见问题
+
+### Q: REPL 中 inspect 模块时报 "window is not defined"
+
+**原因**：部分模块（如 `365c`）依赖浏览器全局变量，而 CLI REPL 运行在纯 Node.js 环境中。
+
+**解决方案**：
+
+| 场景 | 方法 |
+|------|------|
+| 分析加密模块 | `inspect 7d92`（无浏览器依赖 ✅） |
+| 搜索源码 | `search queryServiceFacilities`（只搜索，不执行 ✅） |
+| 执行 API 调用 | 使用脚本 `node examples/nhsa-api-demo.js` |
+
+**哪些模块可在 REPL 中直接使用**：
+
+```
+✅ 7d92 - 加密/解密模块
+❌ 365c - API 模块（依赖 window）
+❌ e7fb - 查询模块（依赖 window）
+```
+
+**程序中启用浏览器环境**（参考 `nhsa-api-demo.js`）：
+
+```javascript
+import { WebpackBundleLoader, setupBrowserEnv } from 'wbl';
+
+// 必须先设置浏览器环境
+setupBrowserEnv({
+    url: 'https://fuwu.nhsa.gov.cn/nationalHallSt/',
+    referrer: 'https://fuwu.nhsa.gov.cn/',
+    regexpPatches: { "['鈥橾": "\\['鈥橾" }
+});
+
+// 然后加载 bundle 和使用模块
+const loader = new WebpackBundleLoader();
+// ...
+```
