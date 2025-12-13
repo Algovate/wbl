@@ -5,27 +5,7 @@
 import { BUNDLE_PATTERNS } from '../constants.js';
 import { BundleLoadError } from '../errors.js';
 import type { BundleParser, ParseResult, ModuleFunction, WebpackModule, WebpackRequire } from './types.js';
-
-/**
- * Simple brace matching for module extraction
- * Doesn't handle strings to avoid issues with regex literals containing quotes
- */
-function findMatchingBraceSimple(content: string, openPos: number): number {
-    if (openPos < 0 || openPos >= content.length || content[openPos] !== '{') {
-        return -1;
-    }
-
-    let depth = 0;
-    for (let i = openPos; i < content.length; i++) {
-        const char = content[i];
-        if (char === '{') depth++;
-        else if (char === '}') {
-            depth--;
-            if (depth === 0) return i;
-        }
-    }
-    return -1;
-}
+import { findMatchingBrace } from '../utils/parsing.js';
 
 /**
  * Wrap a Webpack 5 module function
@@ -78,7 +58,7 @@ function parseWebpack5Modules(
     }
 
     const startIndex = modulesMatch.index + modulesMatch[0].length - 1;
-    const endIndex = findMatchingBraceSimple(content, startIndex);
+    const endIndex = findMatchingBrace(content, startIndex);
 
     if (endIndex === -1) {
         throw new BundleLoadError(bundleName, 'Could not find matching brace for __webpack_modules__');

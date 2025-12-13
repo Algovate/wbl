@@ -5,14 +5,14 @@
 import { CommandContext } from '../types.js';
 
 export function cmdCall(ctx: CommandContext, methodPath: string, args: string[]): void {
-    const parts = methodPath.split('.');
-    if (parts.length < 2) {
+    const lastDot = methodPath.lastIndexOf('.');
+    if (lastDot <= 0 || lastDot === methodPath.length - 1) {
         console.error('Error: Use format moduleId.methodName');
         return;
     }
 
-    const moduleId = parts[0];
-    const methodName = parts.slice(1).join('.');
+    const moduleId = methodPath.slice(0, lastDot);
+    const methodName = methodPath.slice(lastDot + 1);
 
     try {
         // Parse args as JSON

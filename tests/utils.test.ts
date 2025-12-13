@@ -36,6 +36,11 @@ describe('findMatchingBrace', () => {
     it('should return -1 for unmatched braces', () => {
         expect(findMatchingBrace('{ a: 1', 0)).toBe(-1);
     });
+
+    it('should handle template literals with expressions', () => {
+        const content = '{ const msg = `value is ${foo({ bar: 1 })}`; }';
+        expect(findMatchingBrace(content, 0)).toBe(content.length - 1);
+    });
 });
 
 describe('formatSize', () => {
