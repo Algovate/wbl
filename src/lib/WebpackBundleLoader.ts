@@ -3,6 +3,7 @@
  * 
  * Core class for loading and executing webpack bundles.
  * Supports Webpack 4 (main/chunk) and Webpack 5 (IIFE/UMD) formats.
+ * Includes optional source map integration for viewing original source code.
  */
 
 import * as fs from 'fs';
@@ -10,8 +11,19 @@ import * as path from 'path';
 import { ModuleNotFoundError, ModuleExecutionError } from './errors.js';
 import { parseBundle } from './parsers/index.js';
 import type { ModuleFunction, WebpackModule, WebpackRequire, BundleFormat } from './parsers/types.js';
-import { findMatchingBrace } from './utils/index.js';
+import { SourceMapResolver } from './utils/sourceMap.js';
 
+/**
+ * Options for loading a bundle
+ */
+export interface LoadBundleOptions {
+    /** Auto-load source map if available (.map file or inline) */
+    loadSourceMap?: boolean;
+}
+
+/**
+ * Information about a loaded bundle
+ */
 export interface BundleInfo {
     name: string;
     path: string;
@@ -19,10 +31,14 @@ export interface BundleInfo {
     size: string;
     moduleCount: number;
     moduleIds: string[];
+    /** Source map resolver (if loaded) */
+    sourceMap?: SourceMapResolver;
+    /** Whether source map was loaded */
+    hasSourceMap: boolean;
 }
 
 export interface LoadResult {
-    bundles: { file: string; modules: number }[];
+    bundles: { file: string; modules: number }[]
     totalModules: number;
 }
 
@@ -34,13 +50,12 @@ export class WebpackBundleLoader {
     private installedModules: Record<string, WebpackModule> = {};
     private bundleInfo: BundleInfo[] = [];
 
-    // findMatchingBrace is imported from utils - kept as static method for backwards compatibility
-    private static findMatchingBrace = findMatchingBrace;
-
     /**
      * Load a webpack bundle file
+     * @param filePath Path to the bundle file
+     * @param options Loading options (e.g., whether to load source map)
      */
-    loadBundle(filePath: string): number {
+    async loadBundle(filePath: string, options: LoadBundleOptions = {}): Promise<number> {
         const absolutePath = path.resolve(filePath);
         const bundleName = path.basename(filePath);
         const content = fs.readFileSync(absolutePath, 'utf-8');
@@ -52,13 +67,57 @@ export class WebpackBundleLoader {
         const count = Object.keys(modules).length;
         Object.assign(this.modules, modules);
 
+        // Create bundle info
+        const info: BundleInfo = {
+            name: bundleName,
+            path: absolutePath,
+            format,
+            size: sizeMB,
+            moduleCount: count,
+            moduleIds: Object.keys(modules),
+            hasSourceMap: false,
+        };
+
+        // Try to load source map if requested
+        if (options.loadSourceMap) {
+            const resolver = new SourceMapResolver();
+            try {
+                const loaded = await resolver.loadFromBundle(absolutePath);
+                if (loaded) {
+                    info.sourceMap = resolver;
+                    info.hasSourceMap = true;
+                }
+            } catch {
+                // Source map loading failed, continue without it
+            }
+        }
+
+        this.bundleInfo.push(info);
+        return count;
+    }
+
+    /**
+     * Synchronous bundle loading (legacy, without source map support)
+     */
+    loadBundleSync(filePath: string): number {
+        const absolutePath = path.resolve(filePath);
+        const bundleName = path.basename(filePath);
+        const content = fs.readFileSync(absolutePath, 'utf-8');
+        const sizeMB = (content.length / 1024 / 1024).toFixed(2);
+
+        const { modules, format } = parseBundle(content, bundleName);
+
+        const count = Object.keys(modules).length;
+        Object.assign(this.modules, modules);
+
         this.bundleInfo.push({
             name: bundleName,
             path: absolutePath,
             format,
             size: sizeMB,
             moduleCount: count,
-            moduleIds: Object.keys(modules)
+            moduleIds: Object.keys(modules),
+            hasSourceMap: false,
         });
 
         return count;
@@ -70,7 +129,7 @@ export class WebpackBundleLoader {
     loadBundles(filePaths: string[]): LoadResult {
         const results = filePaths.map(fp => ({
             file: path.basename(fp),
-            modules: this.loadBundle(fp)
+            modules: this.loadBundleSync(fp)
         }));
         return {
             bundles: results,
@@ -78,9 +137,6 @@ export class WebpackBundleLoader {
         };
     }
 
-    /**
-     * Webpack require function
-     */
     // Hooks system
     private hooks: {
         beforeExecute: Array<(moduleId: string, module: WebpackModule) => void>;
@@ -205,9 +261,42 @@ export class WebpackBundleLoader {
         }
         try {
             return this.modules[moduleId].toString();
-        } catch (e) {
+        } catch {
             return '[Native or bound function]';
         }
+    }
+
+    /**
+     * Get original source from source map (if available)
+     * Returns the first matching original source for the module
+     */
+    getOriginalSource(moduleId: string): string | null {
+        // Find which bundle contains this module
+        for (const bundle of this.bundleInfo) {
+            if (bundle.moduleIds.includes(moduleId) && bundle.sourceMap) {
+                const sources = bundle.sourceMap.getSources();
+                // Try to find a source that matches the module ID
+                const matchingSource = sources.find(s =>
+                    s.includes(moduleId) || moduleId.includes(path.basename(s, '.ts'))
+                );
+                if (matchingSource) {
+                    return bundle.sourceMap.getSourceContent(matchingSource);
+                }
+                // If no exact match, return first source
+                if (sources.length > 0) {
+                    return bundle.sourceMap.getSourceContent(sources[0]);
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Get source map resolver for a bundle
+     */
+    getSourceMapResolver(bundleName: string): SourceMapResolver | null {
+        const bundle = this.bundleInfo.find(b => b.name === bundleName);
+        return bundle?.sourceMap ?? null;
     }
 
     /**
@@ -235,6 +324,10 @@ export class WebpackBundleLoader {
      * Reset the loader state
      */
     reset(): void {
+        // Destroy source map consumers
+        for (const bundle of this.bundleInfo) {
+            bundle.sourceMap?.destroy();
+        }
         this.modules = {};
         this.installedModules = {};
         this.bundleInfo = [];

@@ -8,10 +8,13 @@ import { WebpackBundleLoader, ModuleAnalyzer, setupBrowserEnv } from 'wbl';
 // Optional: enable browser environment for DOM-dependent bundles
 setupBrowserEnv({ url: 'https://example.com/' });
 
-// Load bundles
+// Load bundles (sync)
 const loader = new WebpackBundleLoader();
-loader.loadBundle('path/to/bundle.js');
-loader.loadBundle('path/to/chunk.js');
+loader.loadBundleSync('path/to/bundle.js');
+loader.loadBundleSync('path/to/chunk.js');
+
+// Or load with source map (async)
+await loader.loadBundle('path/to/bundle.js', { loadSourceMap: true });
 
 console.log(`Loaded ${loader.totalModules} modules`);
 
@@ -27,12 +30,23 @@ const analyzer = new ModuleAnalyzer(loader);
 
 | Method | Returns | Description |
 |--------|---------|-------------|
-| `loadBundle(path)` | `number` | Load bundle, returns module count |
+| `loadBundleSync(path)` | `number` | Load bundle synchronously, returns module count |
+| `loadBundle(path, options?)` | `Promise<number>` | Load bundle async with optional source map |
 | `require(id)` | `any` | Get module exports |
 | `getModuleIds()` | `string[]` | All module IDs |
 | `getModuleSource(id)` | `string` | Module source code |
 | `getModuleExports(id)` | `any` | Module exports object |
+| `getOriginalSource(id)` | `string \| null` | Original source from source map |
+| `getSourceMapResolver(name)` | `SourceMapResolver \| null` | Get resolver for bundle |
 | `hasModule(id)` | `boolean` | Check if module exists |
+
+### LoadBundleOptions
+
+```typescript
+interface LoadBundleOptions {
+  loadSourceMap?: boolean;  // Auto-load source map if available
+}
+```
 
 ### Properties
 
@@ -44,14 +58,22 @@ const analyzer = new ModuleAnalyzer(loader);
 
 ```javascript
 const loader = new WebpackBundleLoader();
-loader.loadBundle('app.js');
+
+// Sync loading
+loader.loadBundleSync('app.js');
+
+// Async with source map
+await loader.loadBundle('bundle.js', { loadSourceMap: true });
 
 // Get exports
 const crypto = loader.require('7d92');
 const result = crypto.a({ data: 'test' });
 
-// Get source
+// Get source (minified)
 const source = loader.getModuleSource('7d92');
+
+// Get original source (if source map loaded)
+const original = loader.getOriginalSource('./src/crypto.ts');
 ```
 
 ---
@@ -103,6 +125,72 @@ for (const mod of modules) {
 const apiModule = analyzer.analyzeSource('365c');
 console.log(apiModule.apiEndpoints);
 // ['/api/user/query', '/api/data/fetch', ...]
+```
+
+---
+
+## SourceMapResolver
+
+Load source maps to view original source code.
+
+```javascript
+import { SourceMapResolver } from 'wbl';
+
+const resolver = new SourceMapResolver();
+
+// Load from file
+await resolver.loadFromFile('bundle.js.map');
+
+// Or auto-detect from bundle
+await resolver.loadFromBundle('bundle.js');
+
+// Get original sources
+const sources = resolver.getSources();
+// ['webpack://MyApp/./src/index.ts', ...]
+
+// Get source content
+const content = resolver.getSourceContent(sources[0]);
+
+// Map position
+const result = await resolver.mapPosition(10, 5);
+console.log(result.sourcePath, result.originalPosition);
+
+// Cleanup
+resolver.destroy();
+```
+
+---
+
+## Extractors
+
+Standalone utilities for source code analysis:
+
+```javascript
+import {
+  extractApiEndpoints,
+  extractHttpMethods,
+  extractMeaningfulStrings,
+  categorizeModule,
+  extractFunctionNames,
+} from 'wbl';
+
+const source = loader.getModuleSource('someModule');
+
+// Find API endpoints
+const endpoints = extractApiEndpoints(source);
+// ['/api/user/query', '/nthl/api/data']
+
+// Detect HTTP methods
+const methods = extractHttpMethods(source);
+// ['GET', 'POST']
+
+// Categorize module
+const categories = categorizeModule(source);
+// ['crypto', 'http', 'api']
+
+// Extract function names
+const functions = extractFunctionNames(source);
+// ['queryUser', 'fetchData', 'encrypt']
 ```
 
 ---

@@ -78,7 +78,7 @@ function initLoader(bundles: string[], out: OutputContext): CommandContext {
     out.log('Loading bundles:');
     for (const bundle of bundles) {
         try {
-            const count = loader.loadBundle(bundle);
+            const count = loader.loadBundleSync(bundle);
             const name = path.basename(bundle);
             out.log(`  ${name}: ${count} modules`);
         } catch (e) {
@@ -90,6 +90,7 @@ function initLoader(bundles: string[], out: OutputContext): CommandContext {
     const analyzer = new ModuleAnalyzer(loader);
     return { loader, analyzer, out };
 }
+
 
 // =============================================================================
 // CLI Setup
@@ -163,11 +164,14 @@ program
     .description('Show module source code (without executing)')
     .requiredOption('-b, --bundles <files...>', 'Bundle files to load')
     .option('-g, --grep <pattern>', 'Filter source by pattern')
-    .action((moduleId: string, options: { bundles: string[]; grep?: string }) => {
+    .option('--sourcemap <file>', 'Path to source map file for original source')
+    .action(async (moduleId: string, options: { bundles: string[]; grep?: string; sourcemap?: string }) => {
         const out = createOutputContext();
         const ctx = initLoader(options.bundles, out);
-        cmdSource(ctx, moduleId, options.grep);
+        await cmdSource(ctx, moduleId, { grep: options.grep, sourcemap: options.sourcemap });
     });
+
+
 
 // -----------------------------------------------------------------------------
 // Execution Commands

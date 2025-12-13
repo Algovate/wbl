@@ -105,24 +105,27 @@ wbl deps 365c --graph --depth 3 -b app.js
 
 ## source
 
-Show module source code without executing.
+Show module source code without executing. Supports source maps for viewing original source.
 
 ```bash
-wbl source <moduleId> -b <bundles...> [--grep <pattern>]
+wbl source <moduleId> -b <bundles...> [--grep <pattern>] [--sourcemap <file>]
 ```
 
 | Option | Description |
 |--------|-------------|
 | `-b, --bundles` | Bundle files to load (required) |
 | `-g, --grep` | Filter source lines by pattern |
+| `--sourcemap <file>` | Path to source map file for original source |
 
 **Examples:**
 ```bash
 wbl source 7d92 -b app.js
 wbl source 365c --grep queryUser -b app.js
+wbl source ./src/api.ts -b bundle.js --sourcemap bundle.js.map
 ```
 
 ---
+
 
 ## call
 

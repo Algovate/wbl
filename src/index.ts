@@ -10,9 +10,12 @@
  * // Optional: Setup browser environment for bundles that need DOM/window
  * const { dom, cleanup } = setupBrowserEnv({ url: 'https://example.com/' });
  * 
- * // Load bundles
+ * // Load bundles (sync)
  * const loader = new WebpackBundleLoader();
- * loader.loadBundle('path/to/bundle.js');
+ * loader.loadBundleSync('path/to/bundle.js');
+ * 
+ * // Or load with source map (async)
+ * await loader.loadBundle('path/to/bundle.js', { loadSourceMap: true });
  * 
  * // Analyze modules
  * const analyzer = new ModuleAnalyzer(loader);
@@ -26,8 +29,8 @@
  */
 
 // Core classes
-export { WebpackBundleLoader, BundleInfo, LoadResult } from './lib/WebpackBundleLoader.js';
-export { ModuleAnalyzer, ModuleInfo, ExportAnalysis, DependencyAnalysis, SearchMatch, BundleSummary } from './lib/ModuleAnalyzer.js';
+export { WebpackBundleLoader, BundleInfo, LoadResult, LoadBundleOptions } from './lib/WebpackBundleLoader.js';
+export { ModuleAnalyzer, ModuleInfo, ExportAnalysis, DependencyAnalysis, SearchMatch, BundleSummary, SourceAnalysis } from './lib/ModuleAnalyzer.js';
 export { setupBrowserEnv, BrowserEnvOptions, BrowserEnvResult } from './lib/BrowserEnv.js';
 
 // Error classes
@@ -38,4 +41,14 @@ export { BUNDLE_PATTERNS, REQUIRE_PATTERNS, BROWSER_ENV_DEFAULTS, CLI_CONFIG, LI
 
 // Utilities
 export { findMatchingBrace, formatSize, truncate, getValuePreview, formatSource } from './lib/utils/index.js';
+export { SourceMapResolver, SourceMapResult, SourceMapResolverOptions } from './lib/utils/sourceMap.js';
 
+// Extractors
+export {
+    extractApiEndpoints,
+    extractHttpMethods,
+    extractMeaningfulStrings,
+    categorizeModule,
+    extractFunctionNames,
+    ModuleCategory,
+} from './lib/extractors/index.js';

@@ -31,6 +31,21 @@ npm run build:dev --silent
 cp dist/main.js "$BUNDLES_DIR/class-app.bundle.js"
 echo "   ✅ class-app.bundle.js"
 
+# Build sourcemap-demo (TypeScript with source maps)
+echo "3. Building sourcemap-demo..."
+cd "$SCRIPT_DIR/sourcemap-demo"
+if [ ! -d "node_modules" ]; then
+    echo "   Installing dependencies..."
+    npm install --silent
+fi
+npm run build:dev --silent
+cp dist/sourcemap-demo.js "$BUNDLES_DIR/sourcemap-demo.bundle.js"
+# Copy with both names for compatibility
+cp dist/sourcemap-demo.js.map "$BUNDLES_DIR/sourcemap-demo.bundle.js.map"
+cp dist/sourcemap-demo.js.map "$BUNDLES_DIR/sourcemap-demo.js.map"
+echo "   ✅ sourcemap-demo.bundle.js (with source map)"
+
+
 echo ""
 echo "📁 Bundles updated in: $BUNDLES_DIR"
 echo ""
