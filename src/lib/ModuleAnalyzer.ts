@@ -60,6 +60,27 @@ export interface BundleSummary {
     totalModules: number;
 }
 
+/**
+ * Source-based analysis results
+ */
+export interface SourceAnalysis {
+    moduleId: string;
+    /** API endpoints found in source (e.g., /api/xxx) */
+    apiEndpoints: string[];
+    /** HTTP methods found (GET, POST, PUT, DELETE) */
+    httpMethods: string[];
+    /** Meaningful strings (URLs, error messages, etc.) */
+    strings: string[];
+    /** Likely category based on content */
+    category: string[];
+    /** Function/method names found in source */
+    functionNames: string[];
+    /** Dependencies (modules this module requires) */
+    dependencies: string[];
+    /** Source code length */
+    sourceLength: number;
+}
+
 export class ModuleAnalyzer {
     constructor(private loader: WebpackBundleLoader) { }
 
@@ -312,6 +333,228 @@ export class ModuleAnalyzer {
             .trim()
             .replace(/\s+/g, ' ');
         return body.length > LIMITS.BODY_SNIPPET ? body.substring(0, LIMITS.BODY_SNIPPET) + '...' : body;
+    }
+
+    /**
+     * Analyze module source code to extract useful information
+     */
+    analyzeSource(moduleId: string): SourceAnalysis {
+        const source = this.loader.getModuleSource(moduleId) || '';
+        const deps = this.analyzeDependencies(moduleId);
+
+        return {
+            moduleId,
+            apiEndpoints: this.extractApiEndpoints(source),
+            httpMethods: this.extractHttpMethods(source),
+            strings: this.extractMeaningfulStrings(source),
+            category: this.categorizeModule(source),
+            functionNames: this.extractFunctionNames(source),
+            dependencies: deps.dependencies,
+            sourceLength: source.length
+        };
+    }
+
+    /**
+     * Extract API endpoints from source (e.g., /api/xxx, /nthl/api/xxx)
+     */
+    private extractApiEndpoints(source: string): string[] {
+        const endpoints: Set<string> = new Set();
+
+        // Match URL-like patterns in strings - more comprehensive patterns
+        const patterns = [
+            // Generic /api/ patterns
+            /"(\/[a-zA-Z0-9/_-]*api[a-zA-Z0-9/_-]*)"/gi,
+            /'(\/[a-zA-Z0-9/_-]*api[a-zA-Z0-9/_-]*)'/gi,
+            // Path patterns with query/get/post method names
+            /"(\/[a-zA-Z0-9/_-]+\/(?:query|get|post|create|update|delete|fetch|save|load)[A-Z][a-zA-Z0-9]*)"/g,
+            /'(\/[a-zA-Z0-9/_-]+\/(?:query|get|post|create|update|delete|fetch|save|load)[A-Z][a-zA-Z0-9]*)'/g,
+            // Common NHSA patterns
+            /"(\/nthl\/[a-zA-Z0-9/_-]+)"/g,
+            /'(\/nthl\/[a-zA-Z0-9/_-]+)'/g,
+            // Web patterns
+            /"(\/web\/[a-zA-Z0-9/_-]+)"/g,
+            /'(\/web\/[a-zA-Z0-9/_-]+)'/g,
+            // ebus patterns
+            /"(\/ebus\/[a-zA-Z0-9/_-]+)"/g,
+            /'(\/ebus\/[a-zA-Z0-9/_-]+)'/g,
+        ];
+
+        for (const pattern of patterns) {
+            let match;
+            while ((match = pattern.exec(source)) !== null) {
+                const endpoint = match[1];
+                // Filter: length between 10-100, not just a single segment
+                if (endpoint.length > 10 && endpoint.length < 100 &&
+                    endpoint.split('/').length > 2) {
+                    endpoints.add(endpoint);
+                }
+            }
+        }
+
+        return [...endpoints].slice(0, 30); // Limit to 30
+    }
+
+    /**
+     * Extract HTTP methods usage from source
+     */
+    private extractHttpMethods(source: string): string[] {
+        const methods: Set<string> = new Set();
+
+        // Common HTTP method patterns in code
+        const patterns: [RegExp, string][] = [
+            [/\.get\s*\(/gi, 'GET'],
+            [/\.post\s*\(/gi, 'POST'],
+            [/\.put\s*\(/gi, 'PUT'],
+            [/\.delete\s*\(/gi, 'DELETE'],
+            [/\.patch\s*\(/gi, 'PATCH'],
+            [/method:\s*["']GET["']/gi, 'GET'],
+            [/method:\s*["']POST["']/gi, 'POST'],
+            [/method:\s*["']PUT["']/gi, 'PUT'],
+            [/method:\s*["']DELETE["']/gi, 'DELETE'],
+        ];
+
+        for (const [pattern, method] of patterns) {
+            if (pattern.test(source)) {
+                methods.add(method);
+            }
+        }
+
+        return [...methods];
+    }
+
+    /**
+     * Extract meaningful strings from source (URLs, error messages, etc.)
+     */
+    private extractMeaningfulStrings(source: string): string[] {
+        const strings: Set<string> = new Set();
+
+        // Match quoted strings
+        const stringPattern = /["']([^"']{10,80})["']/g;
+        let match;
+
+        while ((match = stringPattern.exec(source)) !== null) {
+            const str = match[1];
+            // Filter for meaningful strings
+            if (
+                str.includes('http') ||
+                str.includes('Error') ||
+                str.includes('error') ||
+                str.includes('query') ||
+                str.includes('Query') ||
+                str.includes('Service') ||
+                str.includes('encrypt') ||
+                str.includes('decrypt') ||
+                str.match(/^[A-Z][a-z]+[A-Z]/) || // camelCase names
+                str.match(/^[a-z]+_[a-z]+/) // snake_case names
+            ) {
+                strings.add(str);
+            }
+        }
+
+        return [...strings].slice(0, 15); // Limit to 15
+    }
+
+    /**
+     * Categorize module based on source content
+     */
+    private categorizeModule(source: string): string[] {
+        const categories: string[] = [];
+        const lowerSource = source.toLowerCase();
+
+        // Check for various patterns
+        if (lowerSource.includes('encrypt') || lowerSource.includes('decrypt') ||
+            lowerSource.includes('sm2') || lowerSource.includes('sm4') ||
+            lowerSource.includes('aes') || lowerSource.includes('rsa')) {
+            categories.push('crypto');
+        }
+
+        if (lowerSource.includes('axios') || lowerSource.includes('fetch') ||
+            lowerSource.includes('.post(') || lowerSource.includes('.get(') ||
+            source.includes('XMLHttpRequest')) {
+            categories.push('http');
+        }
+
+        if (source.includes('/api/') || source.includes('.api.')) {
+            categories.push('api');
+        }
+
+        if (lowerSource.includes('vue') || lowerSource.includes('react') ||
+            lowerSource.includes('component') || source.includes('render(')) {
+            categories.push('component');
+        }
+
+        if (lowerSource.includes('router') || lowerSource.includes('route')) {
+            categories.push('router');
+        }
+
+        if (lowerSource.includes('store') || lowerSource.includes('vuex') ||
+            lowerSource.includes('redux') || lowerSource.includes('state')) {
+            categories.push('store');
+        }
+
+        if (lowerSource.includes('localstorage') || lowerSource.includes('sessionstorage') ||
+            lowerSource.includes('cookie')) {
+            categories.push('storage');
+        }
+
+        if (lowerSource.includes('validate') || lowerSource.includes('validator')) {
+            categories.push('validation');
+        }
+
+        if (lowerSource.includes('format') || lowerSource.includes('parse') ||
+            lowerSource.includes('stringify')) {
+            categories.push('util');
+        }
+
+        return categories;
+    }
+
+    /**
+     * Extract function/method names from source
+     */
+    private extractFunctionNames(source: string): string[] {
+        const names: Set<string> = new Set();
+
+        // Match function declarations and assignments
+        const patterns = [
+            /function\s+([a-zA-Z_$][a-zA-Z0-9_$]{2,})\s*\(/g,
+            /([a-zA-Z_$][a-zA-Z0-9_$]{2,})\s*[:=]\s*function/g,
+            /([a-zA-Z_$][a-zA-Z0-9_$]{2,})\s*[:=]\s*\([^)]*\)\s*=>/g,
+            /\.([a-zA-Z_$][a-zA-Z0-9_$]{2,})\s*=\s*function/g,
+        ];
+
+        for (const pattern of patterns) {
+            let match;
+            while ((match = pattern.exec(source)) !== null) {
+                const name = match[1];
+                // Filter out common minified names and keywords
+                if (name.length > 2 && !['undefined', 'function', 'return', 'this'].includes(name)) {
+                    names.add(name);
+                }
+            }
+        }
+
+        // Also look for meaningful method calls that might indicate functionality
+        const methodPatterns = [
+            /\.(query[A-Z][a-zA-Z]+)\s*\(/g,
+            /\.(get[A-Z][a-zA-Z]+)\s*\(/g,
+            /\.(set[A-Z][a-zA-Z]+)\s*\(/g,
+            /\.(create[A-Z][a-zA-Z]+)\s*\(/g,
+            /\.(update[A-Z][a-zA-Z]+)\s*\(/g,
+            /\.(delete[A-Z][a-zA-Z]+)\s*\(/g,
+            /\.(fetch[A-Z][a-zA-Z]+)\s*\(/g,
+            /\.(load[A-Z][a-zA-Z]+)\s*\(/g,
+            /\.(save[A-Z][a-zA-Z]+)\s*\(/g,
+        ];
+
+        for (const pattern of methodPatterns) {
+            let match;
+            while ((match = pattern.exec(source)) !== null) {
+                names.add(match[1]);
+            }
+        }
+
+        return [...names].slice(0, 25); // Limit to 25
     }
 }
 

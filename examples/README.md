@@ -1,13 +1,11 @@
-# WBL Examples
+# Examples
 
 ## Demo Scripts
 
 | Script | Description |
 |--------|-------------|
-| `demo.js` | Comprehensive demo: bundle loading, module usage, analysis |
-| `webpack5-demo.js` | Webpack 5 bundle compatibility test |
-| `nhsa-api-demo.js` | NHSA API demo with browser environment |
-| `nhsa-api-simple.js` | NHSA API simple implementation |
+| `demo.js` | Basic bundle loading and module analysis |
+| `webpack5-demo.js` | Webpack 5 format compatibility test |
 
 ## Run Examples
 
@@ -17,34 +15,24 @@ node examples/demo.js
 node examples/webpack5-demo.js
 ```
 
-## Bundles Directory
+## Sample Bundles
+
+Test bundles for development:
 
 ```
 bundles/
 ├── simple-math.bundle.js    # Webpack 4 main format
 ├── string-utils.chunk.js    # Webpack 4 chunk format
 ├── utils-lib.bundle.js      # Webpack 5 UMD
-├── class-app.bundle.js      # Webpack 5 IIFE
-└── nhsa/                    # NHSA production bundles
-    ├── app.js
-    └── ServiceSearchModule.js
+└── class-app.bundle.js      # Webpack 5 IIFE
 ```
 
-## Sample Projects
+## Build Sample Projects
 
-Source code for Webpack 5 bundles:
+Source code for sample bundles is in `sample-projects/`:
 
-| Project | Type | Output |
-|---------|------|--------|
-| `utils-lib` | TypeScript UMD library | Various utility functions |
-| `class-app` | ES6 classes | EventEmitter, Store, Models |
-
-Build sample projects:
 ```bash
-# Using npm script (recommended)
 npm run build:samples
-
-# Or manually
-cd examples/sample-projects/utils-lib
-npm install && npm run build:dev
 ```
+
+This builds all sample projects and copies bundles to `bundles/`.

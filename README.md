@@ -1,85 +1,70 @@
-# WBL - Webpack Bundle Loader
+# WBL
 
-A CLI tool for loading, analyzing, and interacting with webpack bundles.
+Webpack Bundle Loader - Load and analyze webpack bundles in Node.js.
 
-## Features
-
-- 📦 Load webpack bundles (Webpack 4 & 5)
-- 🔍 List and search modules
-- 🔬 Inspect module exports
-- 🔗 Analyze dependencies
-- 📞 Call exported methods
-- 💻 Interactive REPL
-
-## Installation
+## Install
 
 ```bash
 npm install wbl
 ```
 
-## CLI Usage
+## Quick Start
 
 ```bash
-# Show bundle info
-wbl info -b bundle.js
-
-# List all modules
+# List modules
 wbl list -b bundle.js
 
-# Inspect module exports
-wbl inspect <moduleId> -b bundle.js
-
-# Show dependencies
-wbl deps <moduleId> -b bundle.js
-
-# Search modules
+# Search (--api for API endpoints only)
 wbl search <pattern> -b bundle.js
+wbl search query --api -b bundle.js
 
-# Call a method
-wbl call <moduleId.method> [args...] -b bundle.js
+# Inspect (--deep for source analysis)
+wbl inspect <id> -b bundle.js
+wbl inspect <id> --deep -b bundle.js
+
+# Dependencies (--graph for Mermaid diagram)
+wbl deps <id> -b bundle.js
+wbl deps <id> --graph -b bundle.js
 
 # Interactive REPL
 wbl repl bundle.js
 ```
 
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `list` | List modules (`--category` to filter) |
+| `search` | Search by pattern (`--api` for endpoints) |
+| `inspect` | View exports (`--deep` for analysis) |
+| `deps` | Dependencies (`--graph` for diagram) |
+| `source` | View source code |
+| `call` | Call a method |
+| `info` | Bundle info |
+| `repl` | Interactive mode |
+
+**Global Options:**
+- `--json` - Output as JSON (for scripts)
+
 ## Programmatic API
 
-```typescript
-import { WebpackBundleLoader, ModuleAnalyzer, setupBrowserEnv } from 'wbl';
-
-// Optional: Setup browser environment for DOM-dependent bundles
-setupBrowserEnv({ url: 'https://example.com/' });
+```javascript
+import { WebpackBundleLoader, ModuleAnalyzer } from 'wbl';
 
 const loader = new WebpackBundleLoader();
-loader.loadBundle('path/to/bundle.js');
+loader.loadBundle('bundle.js');
 
 const analyzer = new ModuleAnalyzer(loader);
 const modules = analyzer.listModules();
 const exports = analyzer.analyzeExports('moduleId');
-const result = analyzer.callMethod('moduleId', 'methodName', [args]);
 ```
 
-## Browser Environment Options
+## Documentation
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `url` | string | Simulated page URL |
-| `referrer` | string | Referrer URL |
-| `regexpPatches` | `Record<string, string>` | Fix malformed regex patterns |
-| `storageQuota` | number | localStorage/sessionStorage quota |
-
-## Supported Bundle Formats
-
-| Format | Version | Detection |
-|--------|---------|-----------|
-| Main | Webpack 4 | `}({` |
-| Chunk | Webpack 4 | `(window.webpackJsonp` |
-| IIFE | Webpack 5 | `(() => { /******/` |
-| UMD | Webpack 5 | `webpackUniversalModuleDefinition` |
-
-## ⚠️ Security Notice
-
-This tool uses `eval()` internally. **Only load bundles from trusted sources.**
+- [CLI Reference](docs/cli.md)
+- [Programmatic API](docs/api.md)
+- [Browser Environment](docs/browser-env.md)
+- [Bundle Formats](docs/formats.md)
 
 ## License
 

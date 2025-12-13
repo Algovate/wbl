@@ -13,40 +13,42 @@ import { cmdInfo } from './info.js';
 
 const HELP_TEXT = `
 Commands:
-  list              List all modules
-  inspect <id>      Inspect module exports
-  deps <id>         Show module dependencies
-  search <pattern>  Search modules
-  call <id.method> [args...]  Call a module method
-  require <id>      Require and return module
-  info              Show bundle info
-  exit              Exit REPL
+  list [--category <cat>]        List modules (filter by category: crypto, api, http...)
+  search <pattern> [--api]       Search modules (--api for API endpoints only)
+  inspect <id> [--deep]          Inspect exports (--deep for source analysis)
+  deps <id> [--graph]            Dependencies (--graph for Mermaid diagram)
+  call <id.method> [args...]     Call a module method
+  require <id>                   Require and return module
+  info                           Show bundle info
+  help                           Show this help
+  exit                           Exit REPL
 `;
 
 /**
- * Command registry for REPL
+ * Parse REPL command arguments with options
  */
-const commands: Record<string, (ctx: CommandContext, args: string[]) => void> = {
-    list: (ctx) => cmdList(ctx),
-    inspect: (ctx, args) => {
-        if (args[0]) cmdInspect(ctx, args[0]);
-        else console.error('Usage: inspect <moduleId>');
-    },
-    deps: (ctx, args) => {
-        if (args[0]) cmdDeps(ctx, args[0]);
-        else console.error('Usage: deps <moduleId>');
-    },
-    search: (ctx, args) => {
-        if (args[0]) cmdSearch(ctx, args[0]);
-        else console.error('Usage: search <pattern>');
-    },
-    call: (ctx, args) => {
-        if (args[0]) cmdCall(ctx, args[0], args.slice(1));
-        else console.error('Usage: call <moduleId.method> [args...]');
-    },
-    info: (ctx) => cmdInfo(ctx),
-    help: () => console.log(HELP_TEXT),
-};
+function parseReplArgs(args: string[]): { positional: string[]; options: Record<string, boolean | string> } {
+    const positional: string[] = [];
+    const options: Record<string, boolean | string> = {};
+
+    for (let i = 0; i < args.length; i++) {
+        const arg = args[i];
+        if (arg.startsWith('--')) {
+            const key = arg.substring(2);
+            // Check if next arg is a value (not another option)
+            if (i + 1 < args.length && !args[i + 1].startsWith('--')) {
+                options[key] = args[i + 1];
+                i++;
+            } else {
+                options[key] = true;
+            }
+        } else {
+            positional.push(arg);
+        }
+    }
+
+    return { positional, options };
+}
 
 export function cmdRepl(ctx: CommandContext): void {
     const rl = readline.createInterface({
@@ -65,7 +67,8 @@ export function cmdRepl(ctx: CommandContext): void {
             return;
         }
 
-        const [cmd, ...args] = input.split(/\s+/);
+        const [cmd, ...rawArgs] = input.split(/\s+/);
+        const { positional, options } = parseReplArgs(rawArgs);
 
         // Handle special commands
         if (cmd === 'exit' || cmd === 'quit') {
@@ -73,27 +76,72 @@ export function cmdRepl(ctx: CommandContext): void {
             return;
         }
 
-        if (cmd === 'require') {
-            if (args[0]) {
-                try {
-                    const exports = ctx.loader.require(args[0]);
-                    console.log(exports);
-                } catch (e) {
-                    console.error(`Error: ${(e as Error).message}`);
-                }
-            } else {
-                console.error('Usage: require <moduleId>');
-            }
-            rl.prompt();
-            return;
-        }
+        try {
+            switch (cmd) {
+                case 'list':
+                    cmdList(ctx, { category: options.category as string });
+                    break;
 
-        // Execute command from registry
-        const handler = commands[cmd];
-        if (handler) {
-            handler(ctx, args);
-        } else {
-            console.error(`Unknown command: ${cmd}. Type "help" for available commands.`);
+                case 'search':
+                    if (positional[0]) {
+                        cmdSearch(ctx, positional[0], { api: !!options.api });
+                    } else {
+                        console.error('Usage: search <pattern> [--api]');
+                    }
+                    break;
+
+                case 'inspect':
+                    if (positional[0]) {
+                        cmdInspect(ctx, positional[0], {
+                            deep: !!options.deep,
+                            verbose: !!options.verbose
+                        });
+                    } else {
+                        console.error('Usage: inspect <moduleId> [--deep] [--verbose]');
+                    }
+                    break;
+
+                case 'deps':
+                    if (positional[0]) {
+                        cmdDeps(ctx, positional[0], {
+                            graph: !!options.graph,
+                            depth: options.depth ? parseInt(options.depth as string, 10) : 2
+                        });
+                    } else {
+                        console.error('Usage: deps <moduleId> [--graph] [--depth <n>]');
+                    }
+                    break;
+
+                case 'call':
+                    if (positional[0]) {
+                        cmdCall(ctx, positional[0], positional.slice(1));
+                    } else {
+                        console.error('Usage: call <moduleId.method> [args...]');
+                    }
+                    break;
+
+                case 'require':
+                    if (positional[0]) {
+                        const exports = ctx.loader.require(positional[0]);
+                        console.log(exports);
+                    } else {
+                        console.error('Usage: require <moduleId>');
+                    }
+                    break;
+
+                case 'info':
+                    cmdInfo(ctx);
+                    break;
+
+                case 'help':
+                    console.log(HELP_TEXT);
+                    break;
+
+                default:
+                    console.error(`Unknown command: ${cmd}. Type "help" for available commands.`);
+            }
+        } catch (e) {
+            console.error(`Error: ${(e as Error).message}`);
         }
 
         rl.prompt();
