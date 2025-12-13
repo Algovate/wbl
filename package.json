@@ -28,7 +28,8 @@
         "test": "vitest run",
         "test:watch": "vitest",
         "test:coverage": "vitest run --coverage",
-        "repl": "node dist/bin/wbl.js repl assets/app.js assets/ServiceSearchModule.js"
+        "repl": "node dist/bin/wbl.js repl assets/app.js assets/ServiceSearchModule.js",
+        "build:samples": "bash examples/sample-projects/build-all.sh"
     },
     "keywords": [
         "webpack",

@@ -41,6 +41,10 @@ Source code for Webpack 5 bundles:
 
 Build sample projects:
 ```bash
+# Using npm script (recommended)
+npm run build:samples
+
+# Or manually
 cd examples/sample-projects/utils-lib
 npm install && npm run build:dev
 ```
