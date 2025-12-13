@@ -3,9 +3,9 @@ import * as path from 'path';
 import { WebpackBundleLoader } from '../src/lib/WebpackBundleLoader.js';
 
 describe('WebpackBundleLoader', () => {
-    const assetsDir = path.join(__dirname, '../assets');
-    const appBundle = path.join(assetsDir, 'app.js');
-    const chunkBundle = path.join(assetsDir, 'ServiceSearchModule.js');
+    const bundlesDir = path.join(__dirname, '../examples/bundles/nhsa');
+    const appBundle = path.join(bundlesDir, 'app.js');
+    const chunkBundle = path.join(bundlesDir, 'ServiceSearchModule.js');
 
     describe('loadBundle', () => {
         it('should load main bundle format', () => {
@@ -131,6 +131,72 @@ describe('WebpackBundleLoader', () => {
 
             expect(loader.totalModules).toBe(0);
             expect(loader.getBundleInfo()).toHaveLength(0);
+        });
+    });
+
+    describe('Webpack 5 bundles', () => {
+        const bundlesDir = path.join(__dirname, '../examples/bundles');
+
+        it('should load Webpack 5 arrow IIFE format', () => {
+            const loader = new WebpackBundleLoader();
+            const classAppBundle = path.join(bundlesDir, 'class-app.bundle.js');
+            const count = loader.loadBundle(classAppBundle);
+
+            expect(count).toBeGreaterThan(0);
+            const info = loader.getBundleInfo();
+            expect(info[0].format).toBe('webpack5');
+        });
+
+        it('should load Webpack 5 UMD format', () => {
+            const loader = new WebpackBundleLoader();
+            const utilsBundle = path.join(bundlesDir, 'utils-lib.bundle.js');
+            const count = loader.loadBundle(utilsBundle);
+
+            expect(count).toBeGreaterThan(0);
+            const info = loader.getBundleInfo();
+            expect(info[0].format).toBe('webpack5-umd');
+        });
+
+        it('should execute Webpack 5 modules', () => {
+            const loader = new WebpackBundleLoader();
+            const utilsBundle = path.join(bundlesDir, 'utils-lib.bundle.js');
+            loader.loadBundle(utilsBundle);
+
+            const arrayModule = loader.require('./src/array.ts');
+            expect(arrayModule).toBeDefined();
+            expect(typeof arrayModule.chunk).toBe('function');
+
+            const result = arrayModule.chunk([1, 2, 3, 4], 2);
+            expect(result).toEqual([[1, 2], [3, 4]]);
+        });
+
+        it('should handle Webpack 5 ES module exports', () => {
+            const loader = new WebpackBundleLoader();
+            const classAppBundle = path.join(bundlesDir, 'class-app.bundle.js');
+            loader.loadBundle(classAppBundle);
+
+            const eventEmitterModule = loader.require('./src/EventEmitter.js');
+            expect(eventEmitterModule).toBeDefined();
+            expect(eventEmitterModule.EventEmitter).toBeDefined();
+
+            // Test class instantiation
+            const emitter = new eventEmitterModule.EventEmitter();
+            expect(typeof emitter.on).toBe('function');
+            expect(typeof emitter.emit).toBe('function');
+        });
+
+        it('should load multiple Webpack 5 bundle formats', () => {
+            const loader = new WebpackBundleLoader();
+            const classAppBundle = path.join(bundlesDir, 'class-app.bundle.js');
+            const utilsBundle = path.join(bundlesDir, 'utils-lib.bundle.js');
+
+            loader.loadBundle(classAppBundle);
+            loader.loadBundle(utilsBundle);
+
+            const info = loader.getBundleInfo();
+            expect(info).toHaveLength(2);
+            expect(info[0].format).toBe('webpack5');
+            expect(info[1].format).toBe('webpack5-umd');
         });
     });
 });

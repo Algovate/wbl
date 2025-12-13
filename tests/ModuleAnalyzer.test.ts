@@ -4,9 +4,9 @@ import { WebpackBundleLoader } from '../src/lib/WebpackBundleLoader.js';
 import { ModuleAnalyzer } from '../src/lib/ModuleAnalyzer.js';
 
 describe('ModuleAnalyzer', () => {
-    const assetsDir = path.join(__dirname, '../assets');
-    const appBundle = path.join(assetsDir, 'app.js');
-    const chunkBundle = path.join(assetsDir, 'ServiceSearchModule.js');
+    const bundlesDir = path.join(__dirname, '../examples/bundles/nhsa');
+    const appBundle = path.join(bundlesDir, 'app.js');
+    const chunkBundle = path.join(bundlesDir, 'ServiceSearchModule.js');
 
     let loader: WebpackBundleLoader;
     let analyzer: ModuleAnalyzer;

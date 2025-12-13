@@ -10,3 +10,4 @@ export { cmdSource } from './source.js';
 export { cmdCall } from './call.js';
 export { cmdInfo } from './info.js';
 export { cmdRepl } from './repl.js';
+export { cmdFormat } from './format.js';

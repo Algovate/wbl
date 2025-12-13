@@ -2,19 +2,20 @@
  * WebpackBundleLoader
  * 
  * Core class for loading and executing webpack bundles.
- * Supports both main bundles and chunk formats.
+ * Supports Webpack 4 (main/chunk) and Webpack 5 (IIFE/UMD) formats.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { BundleLoadError, ModuleNotFoundError, ModuleExecutionError, UnknownBundleFormatError } from './errors.js';
-import { BUNDLE_PATTERNS } from './constants.js';
+import { ModuleNotFoundError, ModuleExecutionError } from './errors.js';
+import { parseBundle } from './parsers/index.js';
+import type { ModuleFunction, WebpackModule, WebpackRequire, BundleFormat } from './parsers/types.js';
 import { findMatchingBrace } from './utils/index.js';
 
 export interface BundleInfo {
     name: string;
     path: string;
-    format: 'main' | 'chunk' | 'unknown';
+    format: BundleFormat;
     size: string;
     moduleCount: number;
     moduleIds: string[];
@@ -25,28 +26,8 @@ export interface LoadResult {
     totalModules: number;
 }
 
-interface WebpackModule {
-    i: string;
-    l: boolean;
-    exports: Record<string, unknown>;
-}
-
-type ModuleFunction = (
-    module: WebpackModule,
-    exports: Record<string, unknown>,
-    require: WebpackRequire
-) => void;
-
-interface WebpackRequire {
-    (moduleId: string): unknown;
-    r: (exports: Record<string, unknown>) => void;
-    d: (exports: Record<string, unknown>, name: string, getter: () => unknown) => void;
-    o: (obj: object, prop: string) => boolean;
-    n: (module: unknown) => () => unknown;
-    m: Record<string, ModuleFunction>;
-    c: Record<string, WebpackModule>;
-    p: string;
-}
+// Re-export types from parsers for backwards compatibility
+export type { ModuleFunction, WebpackModule, WebpackRequire };
 
 export class WebpackBundleLoader {
     private modules: Record<string, ModuleFunction> = {};
@@ -65,54 +46,11 @@ export class WebpackBundleLoader {
         const content = fs.readFileSync(absolutePath, 'utf-8');
         const sizeMB = (content.length / 1024 / 1024).toFixed(2);
 
-        let newModules: Record<string, ModuleFunction> = {};
-        let format: BundleInfo['format'] = 'unknown';
+        // Use the parser factory to parse the bundle
+        const { modules, format } = parseBundle(content, bundleName);
 
-        // Chunk format: (window.webpackJsonp = ...).push([["ChunkName"], { modules }])
-        // Note: Chunk format can have multiple objects separated by commas
-        if (content.startsWith(BUNDLE_PATTERNS.CHUNK_START)) {
-            format = 'chunk';
-            const start = content.indexOf(BUNDLE_PATTERNS.CHUNK_MODULES);
-            if (start !== -1) {
-                // For chunk format, use the original simple approach:
-                // Extract everything from '], {' to the end, then remove trailing '}]);'
-                // This handles cases where there are multiple objects separated by commas
-                const modulesPart = content.substring(start + 3).replace(/\}\s*\]\s*\)\s*;?\s*$/, '}');
-                try {
-                    newModules = eval('(' + modulesPart + ')');
-                } catch (error) {
-                    throw new BundleLoadError(
-                        bundleName,
-                        `Failed to parse modules object: ${error instanceof Error ? error.message : String(error)}`
-                    );
-                }
-            } else {
-                throw new BundleLoadError(bundleName, `Could not find modules object pattern '${BUNDLE_PATTERNS.CHUNK_MODULES}'`);
-            }
-        }
-        // Main bundle format: !function(e) { ... }({ modules })
-        // For main bundles, the modules object extends to the end of the file before the closing '});'
-        // We use the simple approach: take everything after '}({' and remove trailing ');'
-        else {
-            format = 'main';
-            const match = content.match(BUNDLE_PATTERNS.MAIN);
-            if (match && match.index !== undefined) {
-                const modulesPart = content.substring(match.index + 2).replace(/\);\s*$/, '');
-                try {
-                    newModules = eval('(' + modulesPart + ')');
-                } catch (error) {
-                    throw new BundleLoadError(
-                        bundleName,
-                        `Failed to parse modules object: ${error instanceof Error ? error.message : String(error)}`
-                    );
-                }
-            } else {
-                throw new UnknownBundleFormatError(bundleName);
-            }
-        }
-
-        const count = Object.keys(newModules).length;
-        Object.assign(this.modules, newModules);
+        const count = Object.keys(modules).length;
+        Object.assign(this.modules, modules);
 
         this.bundleInfo.push({
             name: bundleName,
@@ -120,7 +58,7 @@ export class WebpackBundleLoader {
             format,
             size: sizeMB,
             moduleCount: count,
-            moduleIds: Object.keys(newModules)
+            moduleIds: Object.keys(modules)
         });
 
         return count;
@@ -191,9 +129,25 @@ export class WebpackBundleLoader {
             Object.defineProperty(exports, '__esModule', { value: true });
         };
 
-        __webpack_require__.d = (exports, name, getter) => {
-            if (!Object.prototype.hasOwnProperty.call(exports, name)) {
-                Object.defineProperty(exports, name, { enumerable: true, get: getter });
+        // Webpack 5 uses: __webpack_require__.d(exports, { name: () => value })
+        // Webpack 4 uses: __webpack_require__.d(exports, name, getter)
+        __webpack_require__.d = (exports, nameOrDefinition, getter?) => {
+            if (typeof nameOrDefinition === 'string' && getter) {
+                // Webpack 4 format: d(exports, name, getter)
+                if (!Object.prototype.hasOwnProperty.call(exports, nameOrDefinition)) {
+                    Object.defineProperty(exports, nameOrDefinition, { enumerable: true, get: getter });
+                }
+            } else if (typeof nameOrDefinition === 'object') {
+                // Webpack 5 format: d(exports, { name: () => value, ... })
+                for (const key in nameOrDefinition) {
+                    if (Object.prototype.hasOwnProperty.call(nameOrDefinition, key) &&
+                        !Object.prototype.hasOwnProperty.call(exports, key)) {
+                        Object.defineProperty(exports, key, {
+                            enumerable: true,
+                            get: nameOrDefinition[key] as () => unknown
+                        });
+                    }
+                }
             }
         };
 

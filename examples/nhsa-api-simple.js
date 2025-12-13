@@ -10,8 +10,8 @@ import { WebpackBundleLoader } from '../dist/lib/WebpackBundleLoader.js';
 // Load webpack bundles
 const loader = new WebpackBundleLoader();
 console.log('Loading bundles...');
-loader.loadBundle('assets/app.js');
-loader.loadBundle('assets/ServiceSearchModule.js');
+loader.loadBundle('examples/bundles/nhsa/app.js');
+loader.loadBundle('examples/bundles/nhsa/ServiceSearchModule.js');
 console.log(`Loaded ${loader.totalModules} modules\n`);
 
 // Get encryption module (7d92)

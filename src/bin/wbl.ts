@@ -9,6 +9,7 @@
  *   deps <id>         Show module dependencies
  *   search <pattern>  Search modules
  *   call <id.method>  Call a module method
+ *   format            Show bundle format information
  *   repl              Interactive REPL mode
  */
 
@@ -26,7 +27,8 @@ import {
     cmdSource,
     cmdCall,
     cmdInfo,
-    cmdRepl
+    cmdRepl,
+    cmdFormat
 } from './commands/index.js';
 
 /**
@@ -138,6 +140,15 @@ program
     .action((options: { bundles: string[] }) => {
         const ctx = initLoader(options.bundles);
         cmdInfo(ctx);
+    });
+
+program
+    .command('format')
+    .description('Analyze and show bundle format information (Webpack 4/5 detection)')
+    .requiredOption('-b, --bundles <files...>', 'Bundle files to load')
+    .action((options: { bundles: string[] }) => {
+        const ctx = initLoader(options.bundles);
+        cmdFormat(ctx);
     });
 
 program.parse();

@@ -21,7 +21,7 @@ console.log('Browser environment initialized (via wbl library)\n');
 // Load Bundles and Test
 // =============================================================================
 
-const BUNDLES = ['assets/app.js', 'assets/ServiceSearchModule.js'];
+const BUNDLES = ['examples/bundles/nhsa/app.js', 'examples/bundles/nhsa/ServiceSearchModule.js'];
 
 const loader = new WebpackBundleLoader();
 console.log('Loading bundles...');

@@ -1,0 +1,14 @@
+{
+    "name": "class-app",
+    "version": "1.0.0",
+    "description": "A sample app with ES6 classes and code splitting",
+    "main": "dist/main.js",
+    "scripts": {
+        "build": "webpack --mode production",
+        "build:dev": "webpack --mode development"
+    },
+    "devDependencies": {
+        "webpack": "^5.89.0",
+        "webpack-cli": "^5.1.4"
+    }
+}

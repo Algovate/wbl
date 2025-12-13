@@ -1,0 +1,16 @@
+{
+    "name": "utils-lib",
+    "version": "1.0.0",
+    "description": "A sample utility library for WBL testing",
+    "main": "dist/utils-lib.js",
+    "scripts": {
+        "build": "webpack --mode production",
+        "build:dev": "webpack --mode development"
+    },
+    "devDependencies": {
+        "ts-loader": "^9.5.1",
+        "typescript": "^5.3.0",
+        "webpack": "^5.89.0",
+        "webpack-cli": "^5.1.4"
+    }
+}
