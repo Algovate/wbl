@@ -125,12 +125,26 @@ export class WebpackBundleLoader {
 
     /**
      * Load multiple bundle files
+     * Continues loading even if some bundles fail
      */
     loadBundles(filePaths: string[]): LoadResult {
-        const results = filePaths.map(fp => ({
-            file: path.basename(fp),
-            modules: this.loadBundleSync(fp)
-        }));
+        const results = filePaths.map(fp => {
+            try {
+                const modules = this.loadBundleSync(fp);
+                return {
+                    file: path.basename(fp),
+                    modules
+                };
+            } catch (error) {
+                // Log error but continue with other bundles
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                console.warn(`Failed to load bundle ${fp}: ${errorMessage}`);
+                return {
+                    file: path.basename(fp),
+                    modules: 0
+                };
+            }
+        });
         return {
             bundles: results,
             totalModules: this.totalModules
@@ -268,23 +282,67 @@ export class WebpackBundleLoader {
 
     /**
      * Get original source from source map (if available)
-     * Returns the first matching original source for the module
+     * 
+     * Note: Module IDs in webpack bundles (e.g., "b381", "7d92") don't directly
+     * map to source file paths. This method uses heuristics to find matching sources.
+     * For precise mapping, use SourceMapResolver.mapPosition() with known line/column.
+     * 
+     * @param moduleId - The webpack module ID
+     * @returns Original source content or null if not found
      */
     getOriginalSource(moduleId: string): string | null {
         // Find which bundle contains this module
         for (const bundle of this.bundleInfo) {
-            if (bundle.moduleIds.includes(moduleId) && bundle.sourceMap) {
-                const sources = bundle.sourceMap.getSources();
-                // Try to find a source that matches the module ID
-                const matchingSource = sources.find(s =>
-                    s.includes(moduleId) || moduleId.includes(path.basename(s, '.ts'))
-                );
-                if (matchingSource) {
-                    return bundle.sourceMap.getSourceContent(matchingSource);
+            if (!bundle.moduleIds.includes(moduleId) || !bundle.sourceMap) {
+                continue;
+            }
+
+            const sources = bundle.sourceMap.getSources();
+            if (sources.length === 0) {
+                continue;
+            }
+
+            // Normalize module ID for matching (remove common prefixes/suffixes)
+            const normalizedModuleId = moduleId.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+            // Try multiple matching strategies
+            // 1. Exact match in source path
+            let matchingSource = sources.find(s => 
+                s.toLowerCase().includes(moduleId.toLowerCase())
+            );
+
+            // 2. Match by basename without extension
+            if (!matchingSource) {
+                const moduleBase = normalizedModuleId;
+                matchingSource = sources.find(s => {
+                    const sourceBase = path.basename(s, path.extname(s))
+                        .toLowerCase()
+                        .replace(/[^a-z0-9]/g, '');
+                    return sourceBase.includes(moduleBase) || moduleBase.includes(sourceBase);
+                });
+            }
+
+            // 3. Try matching numeric IDs with file indices
+            if (!matchingSource && /^\d+$/.test(moduleId)) {
+                const index = parseInt(moduleId, 10);
+                if (index >= 0 && index < sources.length) {
+                    matchingSource = sources[index];
                 }
-                // If no exact match, return first source
-                if (sources.length > 0) {
-                    return bundle.sourceMap.getSourceContent(sources[0]);
+            }
+
+            // If we found a match, return its content
+            if (matchingSource) {
+                const content = bundle.sourceMap.getSourceContent(matchingSource);
+                if (content) {
+                    return content;
+                }
+            }
+
+            // Fallback: return first non-empty source as last resort
+            for (const source of sources) {
+                const content = bundle.sourceMap.getSourceContent(source);
+                if (content && content.trim().length > 0) {
+                    return content;
                 }
             }
         }

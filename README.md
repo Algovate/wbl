@@ -2,6 +2,17 @@
 
 Webpack Bundle Loader - Load and analyze webpack bundles in Node.js.
 
+## Security Warning
+
+⚠️ **IMPORTANT**: WBL uses `eval()` to parse webpack bundles and executes bundle code when modules are required. This means:
+
+- **Code Execution**: Bundle code runs in your Node.js process with full system access
+- **Only Load Trusted Bundles**: Never load bundles from untrusted sources
+- **No Sandboxing**: There is no isolation between bundle code and your application
+- **Use at Your Own Risk**: Suitable for development, analysis, and trusted bundles only
+
+For production use with untrusted bundles, consider implementing additional sandboxing (e.g., using Node.js `vm` module with restricted contexts).
+
 ## Install
 
 ```bash
@@ -98,6 +109,15 @@ const content = resolver.getSourceContent(sources[0]);
 - [Programmatic API](docs/api.md)
 - [Browser Environment](docs/browser-env.md)
 - [Bundle Formats](docs/formats.md)
+
+## Memory Usage
+
+WBL loads entire bundles into memory and caches executed modules. For large bundles:
+
+- **Memory Footprint**: Entire bundle content is kept in memory
+- **Module Caching**: Executed modules are cached (use `reset()` to clear)
+- **Source Maps**: Additional memory is used when source maps are loaded
+- **Cleanup**: Call `loader.reset()` when done to free resources, especially source map consumers
 
 ## License
 

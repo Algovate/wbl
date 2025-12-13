@@ -87,10 +87,20 @@ function parseWebpack5Modules(
     const modulesObjectStr = content.substring(startIndex, endIndex + 1);
 
     try {
-        const rawModules = eval('(' + modulesObjectStr + ')') as Record<string, unknown>;
+        const rawModulesRaw = eval('(' + modulesObjectStr + ')');
+        
+        // Validate that eval result is an object
+        if (typeof rawModulesRaw !== 'object' || rawModulesRaw === null) {
+            throw new BundleLoadError(bundleName, 'Parsed modules is not an object');
+        }
+
+        const rawModules = rawModulesRaw as Record<string, unknown>;
         const modules: Record<string, ModuleFunction> = {};
 
         for (const [moduleId, moduleFn] of Object.entries(rawModules)) {
+            if (typeof moduleId !== 'string') {
+                throw new BundleLoadError(bundleName, `Invalid module ID: expected string, got ${typeof moduleId}`);
+            }
             if (typeof moduleFn === 'function') {
                 const fnStr = moduleFn.toString();
                 if (fnStr.includes('eval(')) {
@@ -98,6 +108,9 @@ function parseWebpack5Modules(
                 } else {
                     modules[moduleId] = moduleFn as ModuleFunction;
                 }
+            } else if (moduleFn !== undefined && moduleFn !== null) {
+                // Warn about non-function modules (some may be valid, but log for debugging)
+                console.warn(`Module ${moduleId} in ${bundleName} is not a function (type: ${typeof moduleFn})`);
             }
         }
 

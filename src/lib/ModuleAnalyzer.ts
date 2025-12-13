@@ -184,7 +184,9 @@ export class ModuleAnalyzer {
             const deps: Set<string> = new Set();
 
             // Try all require patterns
+            // Reset lastIndex to avoid state issues with global regex patterns
             for (const pattern of REQUIRE_PATTERNS) {
+                pattern.lastIndex = 0; // Reset global regex state
                 let match;
                 while ((match = pattern.exec(source)) !== null) {
                     deps.add(match[1]);
@@ -219,7 +221,9 @@ export class ModuleAnalyzer {
             const source = this.loader.getModuleSource(id);
             if (source) {
                 // Check if this module requires the target module
+                // Reset lastIndex to avoid state issues with global regex patterns
                 for (const pattern of REQUIRE_PATTERNS) {
+                    pattern.lastIndex = 0; // Reset global regex state
                     let match;
                     while ((match = pattern.exec(source)) !== null) {
                         if (match[1] === moduleId) {
