@@ -1,5 +1,7 @@
 # WBL
 
+[![npm version](https://img.shields.io/npm/v/wbl.svg)](https://www.npmjs.com/package/wbl)
+
 Webpack Bundle Loader - Load and analyze webpack bundles in Node.js.
 
 ## Security Warning
